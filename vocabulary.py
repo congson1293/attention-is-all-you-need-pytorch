@@ -5,7 +5,7 @@ from collections import Counter
 
 class Vocabulary():
 
-    def __init__(self, min_freq=2, max_size=5000):
+    def __init__(self, min_freq=1, max_size=5000):
         self.pad_token = Constants.PAD_WORD
         self.pad_idx = 0
         self.bos_token = Constants.BOS_WORD

@@ -9,6 +9,8 @@ from vocabulary import Vocabulary
 src_lang_model = spacy.load('de')
 trg_lang_model = spacy.load('en')
 share_vocab = True
+max_vocab_size_src = 10000
+max_vocab_size_trg = 10000
 max_seq_len_src = 50
 max_seq_len_trg = 50
 
@@ -16,12 +18,12 @@ def remove_punc(words):
     result = list(map(lambda w: re.sub('[,.!;:\"\'?<>{}\[\]()]', '', w), words))
     return result
 
-def load_data_from_file(data_file, build_vocab=True):
+def load_data_from_file(data_file, build_vocab=True, max_vocab_size=5000):
     with open(data_file) as fp:
         data = [src_lang_model.tokenizer(text.strip()).text for text in fp]
         data = [remove_punc(tok.split()) for tok in data]
         if build_vocab:
-            vocab = Vocabulary()
+            vocab = Vocabulary(min_freq=2, max_size=max_vocab_size)
             vocab.build_vocab(data, lower=True)
             return data, vocab
         else:
@@ -56,24 +58,29 @@ def encode_data(data, vocab, max_seq_len):
     return np.array(result)
 
 
-src_data_train, src_vocab = load_data_from_file('data/multi30k/train.de', build_vocab=True)
+src_data_train, src_vocab = load_data_from_file('data/multi30k/train.de',
+                                                build_vocab=True,
+                                                max_vocab_size=max_vocab_size_src)
 print('[Info] Get source language vocabulary size:', len(src_vocab.stoi))
-trg_data_train, trg_vocab = load_data_from_file('data/multi30k/train.en', build_vocab=True)
+trg_data_train, trg_vocab = load_data_from_file('data/multi30k/train.en',
+                                                build_vocab=True,
+                                                max_vocab_size=max_vocab_size_trg)
 print('[Info] Get target language vocabulary size:', len(trg_vocab.stoi))
+
 train = {'src': src_data_train, 'trg': trg_data_train}
 train = filter_data_with_lenght(train)
 train['src'] = encode_data(train['src'], src_vocab, max_seq_len_src)
 train['trg'] = encode_data(train['trg'], trg_vocab, max_seq_len_trg)
 
-src_data_val = load_data_from_file('.data/multi30k/val.de', build_vocab=False)
-trg_data_val = load_data_from_file('.data/multi30k/val.en', build_vocab=False)
+src_data_val = load_data_from_file('data/multi30k/val.de', build_vocab=False)
+trg_data_val = load_data_from_file('data/multi30k/val.en', build_vocab=False)
 val = {'src': src_data_val, 'trg': trg_data_val}
 val = filter_data_with_lenght(val)
 val['src'] = encode_data(val['src'], src_vocab, max_seq_len_src)
 val['trg'] = encode_data(val['trg'], trg_vocab, max_seq_len_trg)
 
-src_data_test = load_data_from_file('.data/multi30k/test2016.de', build_vocab=False)
-trg_data_test = load_data_from_file('.data/multi30k/test2016.en', build_vocab=False)
+src_data_test = load_data_from_file('data/multi30k/test2016.de', build_vocab=False)
+trg_data_test = load_data_from_file('data/multi30k/test2016.en', build_vocab=False)
 test = {'src': src_data_test, 'trg': trg_data_test}
 test = filter_data_with_lenght(test)
 test['src'] = encode_data(test['src'], src_vocab, max_seq_len_src)
