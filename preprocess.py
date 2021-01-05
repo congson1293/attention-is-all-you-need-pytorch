@@ -96,8 +96,7 @@ if share_vocab:
             idx = len(trg_vocab.stoi)
             trg_vocab.stoi[w] = idx
             trg_vocab.itos[idx] = w
-    src_vocab.stoi = trg_vocab.stoi
-    src_vocab.itos = trg_vocab.itos
+    src_vocab = trg_vocab
     print('[Info] Get merged vocabulary size:', len(src_vocab.stoi))
 
 data = {'vocab': {'src': src_vocab, 'trg': trg_vocab},
