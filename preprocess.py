@@ -5,8 +5,6 @@ import joblib as pickle
 
 from vocabulary import Vocabulary
 
-from transformer import Constants
-
 
 src_lang_model = spacy.load('de')
 trg_lang_model = spacy.load('en')
