@@ -116,7 +116,7 @@ def eval_epoch(model, validation_data, device, opt):
 
             # prepare data
             src_seq = batch[0].to(device)
-            trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch.trg))
+            trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch[1]))
 
             # forward
             pred = model(src_seq, trg_seq)
