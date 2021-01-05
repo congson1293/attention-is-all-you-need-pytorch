@@ -5,7 +5,7 @@ from collections import Counter
 
 class Vocabulary():
 
-    def __init__(self, min_freq=1, max_size=5000):
+    def __init__(self):
         self.pad_token = Constants.PAD_WORD
         self.pad_idx = 0
         self.bos_token = Constants.BOS_WORD
@@ -17,20 +17,18 @@ class Vocabulary():
         self.stoi = {self.pad_token: self.pad_idx, self.bos_token: self.bos_idx,
                      self.eos_token: self.eos_idx, self.unk_token: self.unk_idx}
         self.itos = {v: k for k, v in self.stoi.items()}
-        self.min_freq = min_freq
-        self.max_size = max_size
-        self.vocab_size = None
+        self.vocab_size = 0
 
     '''
     input: data is list sentence which sentence is list of word
     '''
-    def build_vocab(self, sentences, lower=True):
+    def build_vocab(self, sentences, lower=True, min_freq=1, max_vocab_size=5000):
         words = list(itertools.chain.from_iterable(sentences))
         if lower:
             words = list(map(lambda w: w.lower(), words))
         word_freq = Counter(words)
-        word_freq = word_freq.most_common(self.max_size)
-        words = [w[0] for w in word_freq if w[1] > self.min_freq]
+        word_freq = word_freq.most_common(max_vocab_size)
+        words = [w[0] for w in word_freq if w[1] > min_freq]
         for w in words:
             idx = len(self.stoi)
             self.stoi[w] = idx

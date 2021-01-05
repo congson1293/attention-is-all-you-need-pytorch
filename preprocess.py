@@ -18,13 +18,14 @@ def remove_punc(words):
     result = list(map(lambda w: re.sub('[,.!;:\"\'?<>{}\[\]()]', '', w), words))
     return result
 
-def load_data_from_file(data_file, build_vocab=True, max_vocab_size=5000):
+def load_data_from_file(data_file, build_vocab=True, min_freq=1, max_vocab_size=5000):
     with open(data_file) as fp:
         data = [src_lang_model.tokenizer(text.strip()).text for text in fp]
         data = [remove_punc(tok.split()) for tok in data]
         if build_vocab:
-            vocab = Vocabulary(min_freq=2, max_size=max_vocab_size)
-            vocab.build_vocab(data, lower=True)
+            vocab = Vocabulary()
+            vocab.build_vocab(data, lower=True, min_freq=min_freq,
+                              max_vocab_size=max_vocab_size)
             return data, vocab
         else:
             return data
@@ -49,21 +50,22 @@ def encode_data(data, vocab, max_seq_len):
             except:
                 idx = vocab.unk_idx
             ss.append(idx)
+        ss.append(vocab.eos_idx)
         if len(ss) < max_seq_len+1: # we add bos token when initialize ss so we need to plus 1
             ss += [vocab.pad_idx] * (max_seq_len - len(ss) + 1)
         elif len(ss) > max_seq_len+1:
             ss = ss[:max_seq_len]
-        ss.append(vocab.eos_idx)
+            ss[-1] = vocab.eos_idx
         result.append(ss)
     return np.array(result)
 
 
 src_data_train, src_vocab = load_data_from_file('data/multi30k/train.de',
-                                                build_vocab=True,
+                                                build_vocab=True, min_freq=2,
                                                 max_vocab_size=max_vocab_size_src)
 print('[Info] Get source language vocabulary size:', len(src_vocab.stoi))
 trg_data_train, trg_vocab = load_data_from_file('data/multi30k/train.en',
-                                                build_vocab=True,
+                                                build_vocab=True, min_freq=2,
                                                 max_vocab_size=max_vocab_size_trg)
 print('[Info] Get target language vocabulary size:', len(trg_vocab.stoi))
 
@@ -96,6 +98,7 @@ if share_vocab:
             idx = len(trg_vocab.stoi)
             trg_vocab.stoi[w] = idx
             trg_vocab.itos[idx] = w
+    trg_vocab.vocab_size = len(trg_vocab.stoi)
     src_vocab = trg_vocab
     print('[Info] Get merged vocabulary size:', len(src_vocab.stoi))
 
