@@ -2,13 +2,14 @@
 
 import torch
 import argparse
-import dill as pickle
+import joblib as pickle
 from tqdm import tqdm
 
 import transformer.Constants as Constants
-from torchtext.data import Dataset
 from transformer.Models import Transformer
 from transformer.Translator import Translator
+from torch.utils.data import TensorDataset, DataLoader, SequentialSampler
+from vocabulary import Vocabulary
 
 
 def load_model(opt, device):
@@ -55,29 +56,21 @@ def main():
     parser.add_argument('-max_seq_len', type=int, default=100)
     parser.add_argument('-no_cuda', action='store_true')
 
-    # TODO: Translate bpe encoded files 
-    #parser.add_argument('-src', required=True,
-    #                    help='Source sequence to decode (one line per sequence)')
-    #parser.add_argument('-vocab', required=True,
-    #                    help='Source sequence to decode (one line per sequence)')
-    # TODO: Batch translation
-    #parser.add_argument('-batch_size', type=int, default=30,
-    #                    help='Batch size')
-    #parser.add_argument('-n_best', type=int, default=1,
-    #                    help="""If verbose is set, will output the n_best
-    #                    decoded sentences""")
-
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda
 
     data = pickle.load(open(opt.data_pkl, 'rb'))
-    SRC, TRG = data['vocab']['src'], data['vocab']['trg']
-    opt.src_pad_idx = SRC.vocab.stoi[Constants.PAD_WORD]
-    opt.trg_pad_idx = TRG.vocab.stoi[Constants.PAD_WORD]
-    opt.trg_bos_idx = TRG.vocab.stoi[Constants.BOS_WORD]
-    opt.trg_eos_idx = TRG.vocab.stoi[Constants.EOS_WORD]
+    src_vocb, trg_vocab = data['vocab']['src'], data['vocab']['trg']
+    opt.src_pad_idx = src_vocb.stoi[Constants.PAD_WORD]
+    opt.trg_pad_idx = trg_vocab.stoi[Constants.PAD_WORD]
+    opt.trg_bos_idx = trg_vocab.stoi[Constants.BOS_WORD]
+    opt.trg_eos_idx = trg_vocab.stoi[Constants.EOS_WORD]
 
-    test_loader = Dataset(examples=data['test'], fields={'src': SRC, 'trg': TRG})
+    test_inputs = torch.tensor(data['test']['src'])
+    test_outputs = torch.tensor(data['test']['trg'])
+    test_data = TensorDataset(test_inputs, test_outputs)
+    test_sampler = SequentialSampler(test_data)
+    test_data_loader = DataLoader(test_data, sampler=test_sampler, batch_size=1)
     
     device = torch.device('cuda' if opt.cuda else 'cpu')
     translator = Translator(
@@ -89,21 +82,28 @@ def main():
         trg_bos_idx=opt.trg_bos_idx,
         trg_eos_idx=opt.trg_eos_idx).to(device)
 
-    unk_idx = SRC.vocab.stoi[SRC.unk_token]
     with open(opt.output, 'w') as f:
-        for example in tqdm(test_loader, mininterval=2, desc='  - (Test)', leave=False):
-            #print(' '.join(example.src))
-            src_seq = [SRC.vocab.stoi.get(word, unk_idx) for word in example.src]
-            pred_seq = translator.translate_sentence(torch.LongTensor([src_seq]).to(device))
-            pred_line = ' '.join(TRG.vocab.itos[idx] for idx in pred_seq)
-            pred_line = pred_line.replace(Constants.BOS_WORD, '').replace(Constants.EOS_WORD, '')
-            #print(pred_line)
-            f.write(pred_line.strip() + '\n')
+        for example in tqdm(test_data_loader, mininterval=2, desc='  - (Test)', leave=False):
+            src_seq = example[0]
+
+            pred_seq = translator.translate_sentence(src_seq).to(device)
+            pred_line = ' '.join(trg_vocab.itos[idx] for idx in pred_seq)
+            pred_line = pred_line.replace(Constants.BOS_WORD, '').replace(Constants.EOS_WORD, '').strip()
+            pred_line = 'Predicted: ' + pred_line
+
+            trg_seq = example[1].detach().cpu().numpy()
+            trg_line = ' '.join(trg_vocab.itos[idx] for idx in trg_seq)
+            trg_line = trg_line.replace(Constants.BOS_WORD, '').replace(Constants.EOS_WORD, '').\
+                replace(Constants.PAD_WORD, '').strip()
+            trg_line = 'Ground truth: ' + trg_line
+
+            line = '\n'.join([pred_line, trg_line])
+            f.write(line + '\n\n')
 
     print('[Info] Finished.')
 
 if __name__ == "__main__":
     '''
-    Usage: python translate.py -model trained.chkpt -data multi30k.pt -no_cuda
+    Usage: python translate.py -model trained.chkpt -data m30k_deen_shr.pkl -no_cuda
     '''
     main()

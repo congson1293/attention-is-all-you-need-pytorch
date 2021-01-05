@@ -1,24 +1,35 @@
 '''
 This script handles the training process.
 '''
+import os
 
 import argparse
 import math
 import time
-import dill as pickle
+import joblib as pickle
 from tqdm import tqdm
 
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from torchtext.data import Field, Dataset, BucketIterator
-from torchtext.datasets import TranslationDataset
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 
 import transformer.Constants as Constants
 from transformer.Models import Transformer
 from transformer.Optim import ScheduledOptim
+from vocabulary import Vocabulary
+
+
+
 
 __author__ = "Yu-Hsiang Huang"
+
+def mkdir(dir):
+    if not os.path.exists(dir):
+        try:
+            os.mkdir(dir)
+        except Exception as e:
+            pass
 
 def cal_performance(pred, gold, trg_pad_idx, smoothing=False):
     ''' Apply label smoothing if needed '''
@@ -55,13 +66,7 @@ def cal_loss(pred, gold, trg_pad_idx, smoothing=False):
     return loss
 
 
-def patch_src(src, pad_idx):
-    src = src.transpose(0, 1)
-    return src
-
-
-def patch_trg(trg, pad_idx):
-    trg = trg.transpose(0, 1)
+def patch_trg(trg):
     trg, gold = trg[:, :-1], trg[:, 1:].contiguous().view(-1)
     return trg, gold
 
@@ -76,8 +81,8 @@ def train_epoch(model, training_data, optimizer, opt, device, smoothing):
     for batch in tqdm(training_data, mininterval=2, desc=desc, leave=False):
 
         # prepare data
-        src_seq = patch_src(batch.src, opt.src_pad_idx).to(device)
-        trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch.trg, opt.trg_pad_idx))
+        src_seq = batch[0].to(device)
+        trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch[1]))
 
         # forward
         optimizer.zero_grad()
@@ -110,8 +115,8 @@ def eval_epoch(model, validation_data, device, opt):
         for batch in tqdm(validation_data, mininterval=2, desc=desc, leave=False):
 
             # prepare data
-            src_seq = patch_src(batch.src, opt.src_pad_idx).to(device)
-            trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch.trg, opt.trg_pad_idx))
+            src_seq = batch[0].to(device)
+            trg_seq, gold = map(lambda x: x.to(device), patch_trg(batch.trg))
 
             # forward
             pred = model(src_seq, trg_seq)
@@ -134,8 +139,9 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     log_train_file, log_valid_file = None, None
 
     if opt.log:
-        log_train_file = opt.log + '.train.log'
-        log_valid_file = opt.log + '.valid.log'
+        mkdir('logs')
+        log_train_file = 'logs/' + opt.log + '.train.log'
+        log_valid_file = 'logs/' + opt.log + '.valid.log'
 
         print('[Info] Training performance will be written to file: {} and {}'.format(
             log_train_file, log_valid_file))
@@ -168,15 +174,15 @@ def train(model, training_data, validation_data, optimizer, device, opt):
 
         checkpoint = {'epoch': epoch_i, 'settings': opt, 'model': model.state_dict()}
 
-        if opt.save_model:
-            if opt.save_mode == 'all':
-                model_name = opt.save_model + '_accu_{accu:3.3f}.chkpt'.format(accu=100*valid_accu)
+        mkdir('models')
+        if opt.save_mode == 'all':
+            model_name = 'models/' + opt.save_model + '_accu_{accu:3.3f}.chkpt'.format(accu=100*valid_accu)
+            torch.save(checkpoint, model_name)
+        elif opt.save_mode == 'best':
+            model_name = 'models/' + opt.save_model + '.chkpt'
+            if valid_loss <= min(valid_losses):
                 torch.save(checkpoint, model_name)
-            elif opt.save_mode == 'best':
-                model_name = opt.save_model + '.chkpt'
-                if valid_loss <= min(valid_losses):
-                    torch.save(checkpoint, model_name)
-                    print('    - [Info] The checkpoint file has been updated.')
+                print('    - [Info] The checkpoint file has been updated.')
 
         if log_train_file and log_valid_file:
             with open(log_train_file, 'a') as log_tf, open(log_valid_file, 'a') as log_vf:
@@ -202,6 +208,8 @@ def main():
 
     parser.add_argument('-epoch', type=int, default=10)
     parser.add_argument('-b', '--batch_size', type=int, default=2048)
+
+    parser.add_argument('-max_token_seq_len', type=int, default=100)
 
     parser.add_argument('-d_model', type=int, default=512)
     parser.add_argument('-d_inner_hid', type=int, default=2048)
@@ -241,10 +249,8 @@ def main():
 
     #========= Loading Dataset =========#
 
-    if all((opt.train_path, opt.val_path)):
-        training_data, validation_data = prepare_dataloaders_from_bpe_files(opt, device)
-    elif opt.data_pkl:
-        training_data, validation_data = prepare_dataloaders(opt, device)
+    if opt.data_pkl:
+        training_data, validation_data = prepare_dataloaders(opt)
     else:
         raise
 
@@ -273,65 +279,35 @@ def main():
     train(transformer, training_data, validation_data, optimizer, device, opt)
 
 
-def prepare_dataloaders_from_bpe_files(opt, device):
+def prepare_dataloaders(opt):
     batch_size = opt.batch_size
-    MIN_FREQ = 2
-    if not opt.embs_share_weight:
-        raise
+    data = pickle.load(opt.data_pkl)
 
-    data = pickle.load(open(opt.data_pkl, 'rb'))
-    MAX_LEN = data['settings'].max_len
-    field = data['vocab']
-    fields = (field, field)
+    opt.src_pad_idx = data['vocab']['src'].stoi[Constants.PAD_WORD]
+    opt.trg_pad_idx = data['vocab']['trg'].stoi[Constants.PAD_WORD]
 
-    def filter_examples_with_length(x):
-        return len(vars(x)['src']) <= MAX_LEN and len(vars(x)['trg']) <= MAX_LEN
-
-    train = TranslationDataset(
-        fields=fields,
-        path=opt.train_path, 
-        exts=('.src', '.trg'),
-        filter_pred=filter_examples_with_length)
-    val = TranslationDataset(
-        fields=fields,
-        path=opt.val_path, 
-        exts=('.src', '.trg'),
-        filter_pred=filter_examples_with_length)
-
-    opt.max_token_seq_len = MAX_LEN + 2
-    opt.src_pad_idx = opt.trg_pad_idx = field.vocab.stoi[Constants.PAD_WORD]
-    opt.src_vocab_size = opt.trg_vocab_size = len(field.vocab)
-
-    train_iterator = BucketIterator(train, batch_size=batch_size, device=device, train=True)
-    val_iterator = BucketIterator(val, batch_size=batch_size, device=device)
-    return train_iterator, val_iterator
-
-
-def prepare_dataloaders(opt, device):
-    batch_size = opt.batch_size
-    data = pickle.load(open(opt.data_pkl, 'rb'))
-
-    opt.max_token_seq_len = data['settings'].max_len
-    opt.src_pad_idx = data['vocab']['src'].vocab.stoi[Constants.PAD_WORD]
-    opt.trg_pad_idx = data['vocab']['trg'].vocab.stoi[Constants.PAD_WORD]
-
-    opt.src_vocab_size = len(data['vocab']['src'].vocab)
-    opt.trg_vocab_size = len(data['vocab']['trg'].vocab)
+    opt.src_vocab_size = data['vocab']['src'].vocab_size
+    opt.trg_vocab_size = data['vocab']['trg'].vocab_size
 
     #========= Preparing Model =========#
     if opt.embs_share_weight:
-        assert data['vocab']['src'].vocab.stoi == data['vocab']['trg'].vocab.stoi, \
+        assert data['vocab']['src'].stoi == data['vocab']['trg'].stoi, \
             'To sharing word embedding the src/trg word2idx table shall be the same.'
 
-    fields = {'src': data['vocab']['src'], 'trg':data['vocab']['trg']}
+    train_inputs = torch.tensor(data['train']['src'])
+    valid_inputs = torch.tensor(data['valid']['src'])
+    train_outputs = torch.tensor(data['train']['trg'])
+    valid_outputs = torch.tensor(data['valid']['trg'])
 
-    train = Dataset(examples=data['train'], fields=fields)
-    val = Dataset(examples=data['valid'], fields=fields)
+    train_data = TensorDataset(train_inputs, train_outputs)
+    train_sampler = RandomSampler(train_data)
+    train_data_loader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
 
-    train_iterator = BucketIterator(train, batch_size=batch_size, device=device, train=True)
-    val_iterator = BucketIterator(val, batch_size=batch_size, device=device)
+    valid_data = TensorDataset(valid_inputs, valid_outputs)
+    train_sampler = SequentialSampler(valid_data)
+    valid_data_loader = DataLoader(train_data, sampler=train_sampler, batch_size=batch_size)
 
-    return train_iterator, val_iterator
+    return train_data_loader, valid_data_loader
 
 
 if __name__ == '__main__':

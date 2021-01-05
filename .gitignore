@@ -101,3 +101,9 @@ ENV/
 
 # mypy
 .mypy_cache/
+.ideas/
+*.pyc
+*.pkl
+*.log
+logs/
+models/
