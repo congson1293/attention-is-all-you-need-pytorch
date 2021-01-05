@@ -8,6 +8,7 @@ from vocabulary import Vocabulary
 
 src_lang_model = spacy.load('de')
 trg_lang_model = spacy.load('en')
+
 share_vocab = True
 max_vocab_size_src = 10000
 max_vocab_size_trg = 10000
