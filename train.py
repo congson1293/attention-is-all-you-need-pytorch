@@ -252,7 +252,7 @@ def main():
     else:
         raise
 
-    print(opt)
+    # print(opt)
 
     transformer = Transformer(
         opt.src_vocab_size,
