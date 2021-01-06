@@ -71,21 +71,21 @@ trg_data_train, trg_vocab = load_data_from_file('data/multi30k/train.en',
 print('[Info] Get target language vocabulary size:', len(trg_vocab.stoi))
 
 train = {'src': src_data_train, 'trg': trg_data_train}
-train = filter_data_with_lenght(train)
+# train = filter_data_with_lenght(train)
 train['src'] = encode_data(train['src'], src_vocab, max_seq_len_src)
 train['trg'] = encode_data(train['trg'], trg_vocab, max_seq_len_trg)
 
 src_data_val = load_data_from_file('data/multi30k/val.de', build_vocab=False)
 trg_data_val = load_data_from_file('data/multi30k/val.en', build_vocab=False)
 val = {'src': src_data_val, 'trg': trg_data_val}
-val = filter_data_with_lenght(val)
+# val = filter_data_with_lenght(val)
 val['src'] = encode_data(val['src'], src_vocab, max_seq_len_src)
 val['trg'] = encode_data(val['trg'], trg_vocab, max_seq_len_trg)
 
 src_data_test = load_data_from_file('data/multi30k/test2016.de', build_vocab=False)
 trg_data_test = load_data_from_file('data/multi30k/test2016.en', build_vocab=False)
 test = {'src': src_data_test, 'trg': trg_data_test}
-test = filter_data_with_lenght(test)
+# test = filter_data_with_lenght(test)
 test['src'] = encode_data(test['src'], src_vocab, max_seq_len_src)
 test['trg'] = encode_data(test['trg'], trg_vocab, max_seq_len_trg)
 

@@ -104,6 +104,5 @@ ENV/
 .ideas/
 *.pyc
 *.pkl
-*.log
 logs/
 models/
