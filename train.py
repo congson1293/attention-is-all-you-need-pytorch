@@ -20,8 +20,6 @@ from transformer.Optim import ScheduledOptim
 from vocabulary import Vocabulary
 
 
-
-
 __author__ = "Yu-Hsiang Huang"
 
 def mkdir(dir):
