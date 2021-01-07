@@ -10,8 +10,8 @@ src_lang_model = spacy.load('de')
 trg_lang_model = spacy.load('en')
 
 share_vocab = True
-max_vocab_size_src = 5000
-max_vocab_size_trg = 5000
+max_vocab_size_src = 10000
+max_vocab_size_trg = 10000
 max_seq_len_src = 30
 max_seq_len_trg = 30
 min_freq = 3
@@ -56,7 +56,7 @@ def encode_data(data, vocab, max_seq_len):
         if len(ss) < max_seq_len+1: # we add bos token when initialize ss so we need to plus 1
             ss += [vocab.pad_idx] * (max_seq_len - len(ss) + 1)
         elif len(ss) > max_seq_len+1:
-            ss = ss[:max_seq_len]
+            ss = ss[:max_seq_len+1]
             ss[-1] = vocab.eos_idx
         result.append(ss)
     return np.array(result)
