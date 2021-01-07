@@ -58,9 +58,10 @@ def cal_loss(pred, gold, trg_pad_idx, smoothing=False):
 
         non_pad_mask = gold.ne(trg_pad_idx)
         loss = -(one_hot * log_prb).sum(dim=1)
-        loss = loss.masked_select(non_pad_mask).sum()  # average later
+        loss = loss.masked_select(non_pad_mask).sum() / non_pad_mask.sum()
     else:
-        loss = F.cross_entropy(pred, gold, ignore_index=trg_pad_idx, reduction='sum')
+        log_prb = F.log_softmax(pred, dim=1)
+        loss = F.cross_entropy(log_prb, gold, ignore_index=trg_pad_idx, reduction='mean')
     return loss
 
 

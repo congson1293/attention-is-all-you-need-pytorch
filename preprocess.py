@@ -10,10 +10,10 @@ src_lang_model = spacy.load('de')
 trg_lang_model = spacy.load('en')
 
 share_vocab = True
-max_vocab_size_src = 10000
-max_vocab_size_trg = 10000
-max_seq_len_src = 50
-max_seq_len_trg = 50
+max_vocab_size_src = 5000
+max_vocab_size_trg = 5000
+max_seq_len_src = 30
+max_seq_len_trg = 30
 min_freq = 3
 
 def remove_punc(words):
