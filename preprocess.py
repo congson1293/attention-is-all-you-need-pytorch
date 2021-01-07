@@ -14,6 +14,7 @@ max_vocab_size_src = 10000
 max_vocab_size_trg = 10000
 max_seq_len_src = 50
 max_seq_len_trg = 50
+min_freq = 3
 
 def remove_punc(words):
     result = list(map(lambda w: re.sub('[,.!;:\"\'?<>{}\[\]()]', '', w), words))
@@ -62,11 +63,11 @@ def encode_data(data, vocab, max_seq_len):
 
 
 src_data_train, src_vocab = load_data_from_file('data/multi30k/train.de',
-                                                build_vocab=True, min_freq=2,
+                                                build_vocab=True, min_freq=min_freq,
                                                 max_vocab_size=max_vocab_size_src)
 print('[Info] Get source language vocabulary size:', len(src_vocab.stoi))
 trg_data_train, trg_vocab = load_data_from_file('data/multi30k/train.en',
-                                                build_vocab=True, min_freq=2,
+                                                build_vocab=True, min_freq=min_freq,
                                                 max_vocab_size=max_vocab_size_trg)
 print('[Info] Get target language vocabulary size:', len(trg_vocab.stoi))
 
